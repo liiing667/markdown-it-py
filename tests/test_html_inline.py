@@ -72,3 +72,43 @@ def test_terminated_constructs_still_reach_the_regex(monkeypatch):
     html = MarkdownIt("commonmark").render(src)
     assert calls, "expected the regex to run for terminated constructs"
     assert html == "<p>" + src + "</p>\n"
+
+
+@pytest.mark.parametrize(
+    "src,expected",
+    [
+        # a CommonMark autolink, not an HTML tag: the autolink rule claims
+        # `<scheme:...>` even though it starts like an open tag
+        (
+            "<https://example.com/a%20b>",
+            '<a href="https://example.com/a%20b">https://example.com/a b</a>',
+        ),
+        # non-ASCII (IDN) autolink: punycoded href, unicode text
+        (
+            "<https://例子.测试/x>",
+            '<a href="https://xn--fsqu00a.xn--0zwm56d/x">https://例子.测试/x</a>',
+        ),
+        # email autolink gains a mailto: href, but the text is unchanged
+        ("<foo@bar.com>", '<a href="mailto:foo@bar.com">foo@bar.com</a>'),
+        # an explicit mailto: autolink keeps the prefix in the text
+        (
+            "<mailto:foo@bar.com>",
+            '<a href="mailto:foo@bar.com">mailto:foo@bar.com</a>',
+        ),
+        # a space is not allowed inside an autolink, so this is literal text
+        ("<http://a.b/c d>", "&lt;http://a.b/c d&gt;"),
+        # ... as is a `<` not followed by a letter, `!`, `?` or `/`
+        ("<1>", "&lt;1&gt;"),
+        # genuine html tags still pass through raw
+        ("<a href='x'>", "<a href='x'>"),
+        ("</a>", "</a>"),
+        ("<div>x</div>", "<div>x</div>"),
+    ],
+)
+def test_autolink_vs_html_inline_boundaries(src, expected):
+    """Pin the boundary between CommonMark autolinks and raw inline HTML.
+
+    Both constructs start with `<`, but `<scheme:...>`/`<email>` are autolinks
+    (spec) while tags/comments/etc. are raw HTML; anything else is text.
+    """
+    assert MarkdownIt("commonmark").renderInline(src) == expected
