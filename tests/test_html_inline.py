@@ -72,3 +72,45 @@ def test_terminated_constructs_still_reach_the_regex(monkeypatch):
     html = MarkdownIt("commonmark").render(src)
     assert calls, "expected the regex to run for terminated constructs"
     assert html == "<p>" + src + "</p>\n"
+
+
+def test_html_block_content_is_not_parsed_as_markdown():
+    """A type-6 HTML block runs until a blank line, so emphasis-like and
+    list-like content inside it must stay literal (CommonMark ex. 189)."""
+    src = "<div>\n*not a list*\n</div>"
+    assert MarkdownIt("commonmark").render(src) == src
+
+
+def test_html_block_inside_list_item():
+    src = "- <div>\n  *not a list*\n  </div>\n"
+    assert MarkdownIt("commonmark").render(src) == (
+        "<ul>\n<li>\n<div>\n*not a list*\n</div>\n</li>\n</ul>\n"
+    )
+
+
+def test_html_disabled_escapes_tags_but_still_parses_markdown():
+    """With ``html: False`` the tags are escaped, but the text between them
+    is parsed as normal markdown, so ``*not a list*`` *is* emphasised."""
+    src = "<div>\n*not a list*\n</div>"
+    assert MarkdownIt("default").render(src) == (
+        "<p>&lt;div&gt;\n<em>not a list</em>\n&lt;/div&gt;</p>\n"
+    )
+
+
+def test_reported_document_matches_commonmark():
+    """End-to-end pin for a user-reported document combining a code span
+    inside emphasis in a list item, a ``<...>`` link destination containing
+    a space, and an HTML block inside a list item."""
+    src = (
+        "- a **bold with `code` inside** end\n"
+        "- [link](<https://example.com/a b>) and auto link https://例子.测试/x\n"
+        "- <div>\n  *not a list*\n  </div>\n"
+    )
+    assert MarkdownIt("commonmark").render(src) == (
+        "<ul>\n"
+        "<li>a <strong>bold with <code>code</code> inside</strong> end</li>\n"
+        '<li><a href="https://example.com/a%20b">link</a> and auto link '
+        "https://例子.测试/x</li>\n"
+        "<li>\n<div>\n*not a list*\n</div>\n</li>\n"
+        "</ul>\n"
+    )
